@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "action_cache_blob_access.go",
         "blob_access.go",
+        "fallback_blob_access.go",
         "cloud_blob_access.go",
         "content_addressable_storage_blob_access.go",
         "error_blob_access.go",

@@ -271,6 +271,17 @@ func createBlobAccess(configuration *pb.BlobAccessConfiguration, storageType str
 			return nil, err
 		}
 		implementation = blobstore.NewSizeDistinguishingBlobAccess(small, large, backend.SizeDistinguishing.CutoffSizeBytes)
+	case *pb.BlobAccessConfiguration_Fallback:
+		backendType = "fallback"
+		primary, err := createBlobAccess(backend.Fallback.Primary, storageType, digestKeyFormat)
+		if err != nil {
+			return nil, err
+		}
+		secondary, err := createBlobAccess(backend.Fallback.Secondary, storageType, digestKeyFormat)
+		if err != nil {
+			return nil, err
+		}
+		implementation = blobstore.NewFallbackBlobAccess(primary, secondary)
 	default:
 		return nil, errors.New("Configuration did not contain a backend")
 	}

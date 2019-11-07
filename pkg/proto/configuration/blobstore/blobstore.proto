@@ -53,7 +53,20 @@ message BlobAccessConfiguration {
 
     // Read objects from/write objects to various cloud-based backends.
     CloudBlobAccessConfiguration cloud = 10;
+
+    // Will try to send/read blobs from primary then fallback to secondary
+    // before reporting results. Also forwards Put requests to secondary on
+    // every Put request.
+    FallbackBlobAccessConfiguration fallback = 11;
   }
+}
+
+message FallbackBlobAccessConfiguration {
+  // Backend to which to send requests for primary blobs (e.g., circle/local).
+  BlobAccessConfiguration primary = 1;
+
+  // Backend to which to send requests for secondary blobs (e.g., S3).
+  BlobAccessConfiguration secondary = 2;
 }
 
 message CircularBlobAccessConfiguration {
