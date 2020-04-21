@@ -2,6 +2,8 @@ package blobstore
 
 import (
 	"context"
+	"math"
+	"time"
 
 	"github.com/buildbarn/bb-storage/pkg/blobstore/buffer"
 	"github.com/buildbarn/bb-storage/pkg/digest"
@@ -31,12 +33,24 @@ func NewCloudBlobAccess(bucket *blob.Bucket, keyPrefix string, storageType Stora
 
 func (ba *cloudBlobAccess) Get(ctx context.Context, digest digest.Digest) buffer.Buffer {
 	key := ba.getKey(digest)
-	result, err := ba.bucket.NewReader(ctx, key, nil)
-	if err != nil {
-		if gcerrors.Code(err) == gcerrors.NotFound {
-			err = status.Errorf(codes.NotFound, err.Error())
+	maxAttempts := 3
+	backoffMs := 150.0
+	attempts := 0
+	var result *blob.Reader
+	for {
+		var err error
+		result, err = ba.bucket.NewReader(ctx, key, nil)
+		if err == nil {
+			break
 		}
-		return buffer.NewBufferFromError(err)
+		if gcerrors.Code(err) != gcerrors.NotFound {
+			return buffer.NewBufferFromError(err)
+		}
+		if attempts >= maxAttempts {
+			return buffer.NewBufferFromError(status.Errorf(codes.NotFound, err.Error()))
+		}
+		time.Sleep(time.Duration(backoffMs * math.Pow(2.0, float64(attempts))) * time.Millisecond)
+		attempts += 1
 	}
 	return ba.storageType.NewBufferFromReader(
 		digest,
