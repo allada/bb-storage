@@ -56,6 +56,7 @@ type BlobAccessInfo struct {
 func newNestedBlobAccessBare(configuration *pb.BlobAccessConfiguration, creator BlobAccessCreator) (BlobAccessInfo, string, error) {
 	readBufferFactory := creator.GetReadBufferFactory()
 	storageTypeName := creator.GetStorageTypeName()
+	dummyDuration, _ := time.ParseDuration("100s")
 	switch backend := configuration.Backend.(type) {
 	case *pb.BlobAccessConfiguration_Circular:
 		implementation, err := createCircularBlobAccess(backend.Circular, creator)
@@ -76,7 +77,7 @@ func newNestedBlobAccessBare(configuration *pb.BlobAccessConfiguration, creator 
 				return BlobAccessInfo{}, "", err
 			}
 			return BlobAccessInfo{
-				BlobAccess:      blobstore.NewCloudBlobAccess(bucket, backend.Cloud.KeyPrefix, readBufferFactory, digestKeyFormat),
+				BlobAccess:      blobstore.NewCloudBlobAccess(bucket, "", backend.Cloud.KeyPrefix, readBufferFactory, digestKeyFormat, nil, dummyDuration, clock.SystemClock),
 				DigestKeyFormat: digestKeyFormat,
 			}, "cloud", nil
 		case *pb.CloudBlobAccessConfiguration_Azure:
@@ -91,7 +92,7 @@ func newNestedBlobAccessBare(configuration *pb.BlobAccessConfiguration, creator 
 				return BlobAccessInfo{}, "", err
 			}
 			return BlobAccessInfo{
-				BlobAccess:      blobstore.NewCloudBlobAccess(bucket, backend.Cloud.KeyPrefix, readBufferFactory, digestKeyFormat),
+				BlobAccess:      blobstore.NewCloudBlobAccess(bucket, "", backend.Cloud.KeyPrefix, readBufferFactory, digestKeyFormat, nil, dummyDuration, clock.SystemClock),
 				DigestKeyFormat: digestKeyFormat,
 			}, "azure", nil
 		case *pb.CloudBlobAccessConfiguration_Gcs:
@@ -115,7 +116,7 @@ func newNestedBlobAccessBare(configuration *pb.BlobAccessConfiguration, creator 
 				return BlobAccessInfo{}, "", err
 			}
 			return BlobAccessInfo{
-				BlobAccess:      blobstore.NewCloudBlobAccess(bucket, backend.Cloud.KeyPrefix, readBufferFactory, digestKeyFormat),
+				BlobAccess:      blobstore.NewCloudBlobAccess(bucket, "", backend.Cloud.KeyPrefix, readBufferFactory, digestKeyFormat, nil, dummyDuration, clock.SystemClock),
 				DigestKeyFormat: digestKeyFormat,
 			}, "gcs", nil
 		case *pb.CloudBlobAccessConfiguration_S3:
@@ -128,8 +129,12 @@ func newNestedBlobAccessBare(configuration *pb.BlobAccessConfiguration, creator 
 			if err != nil {
 				return BlobAccessInfo{}, "", err
 			}
+			minRefreshAge, err := ptypes.Duration(backendConfig.S3.MinimumRefreshAge)
+			if err != nil {
+				return BlobAccessInfo{}, "", util.StatusWrap(err, "Failed to obtain S3 refresh age")
+			}
 			return BlobAccessInfo{
-				BlobAccess:      blobstore.NewCloudBlobAccess(bucket, backend.Cloud.KeyPrefix, readBufferFactory, digestKeyFormat),
+				BlobAccess:      blobstore.NewCloudBlobAccess(bucket, backendConfig.S3.Bucket, backend.Cloud.KeyPrefix, readBufferFactory, digestKeyFormat, blobstore.NewS3LRURefreshingBeforeCopyFunc(minRefreshAge, clock.SystemClock), minRefreshAge, clock.SystemClock),
 				DigestKeyFormat: digestKeyFormat,
 			}, "s3", nil
 		default:
